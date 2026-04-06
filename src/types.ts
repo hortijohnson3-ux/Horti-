@@ -8,6 +8,7 @@ export interface Signal {
   gale?: number;
   confidence?: number;
   pattern?: string;
+  instruction?: string;
 }
 
 export interface AppState {

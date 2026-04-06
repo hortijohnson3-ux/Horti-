@@ -20,9 +20,11 @@ import {
   Bell,
   User,
   Settings,
-  LogOut
+  LogOut,
+  AlertTriangle
 } from 'lucide-react';
 import { Signal, SignalType } from './types';
+import { analyzeBacBoPattern } from './services/geminiService';
 
 // Mock initial history
 const INITIAL_HISTORY: Signal[] = [
@@ -52,11 +54,16 @@ export default function App() {
     { name: 'Pop Smok Israel', profit: 3200, winRate: 92, rank: 7 },
   ]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [nextSignalTimer, setNextSignalTimer] = useState(25); // seconds (Bac Bo cycle)
+  const [nextSignalTimer, setNextSignalTimer] = useState(60); // seconds (Bac Bo cycle)
   const [analysisCount, setAnalysisCount] = useState(Math.floor(Math.random() * 100) + 150);
+  const [totalWins, setTotalWins] = useState(() => {
+    const saved = localStorage.getItem('hj_total_wins');
+    return saved ? parseInt(saved, 10) : Math.floor(Math.random() * 200) + 400;
+  });
   const [accuracy, setAccuracy] = useState(98.4);
   const [accuracyTrend, setAccuracyTrend] = useState<'up' | 'down' | null>(null);
   const [analysisMessage, setAnalysisMessage] = useState('Iniciando IA...');
+  const [analysisTimer, setAnalysisTimer] = useState(10);
 
   // Initial loading simulation
   useEffect(() => {
@@ -86,63 +93,73 @@ export default function App() {
     setIsAnalyzing(false);
   };
 
-  const generateSignal = useCallback(() => {
-    if (!isAuthenticated) return;
+  const generateSignal = useCallback(async () => {
+    if (!isAuthenticated || isAnalyzing) return;
     setIsAnalyzing(true);
+    // Remove setCurrentSignal(null) from here to keep old signal visible during analysis
+    
+    setAnalysisTimer(10);
     
     const messages = [
-      'Analisando tendências do Bac Bo Brasileiro...',
+      'IA Conectando à Mesa do Bac Bo Brasileiro...',
+      'Analisando tendências reais em tempo real...',
+      '⚠️ PREPARE-SE: Possível entrada em breve...',
       'Verificando histórico de rodadas recentes...',
-      'IA calculando probabilidades de Azul/Vermelho...',
-      'Detectando padrões de repetição...',
+      'Detectando padrões de repetição e quebra...',
+      'IA calculando probabilidades estatísticas...',
+      '⚠️ ATENÇÃO: Aguarde a confirmação final...',
       'Validando sinal com algoritmo de alta precisão...',
-      'Finalizando análise estatística...'
+      'Finalizando análise de padrão detectado...'
     ];
 
     let msgIndex = 0;
     const msgInterval = setInterval(() => {
       setAnalysisMessage(messages[msgIndex % messages.length]);
       msgIndex++;
-    }, 800);
+    }, 700);
 
-    // Simulate analysis time
-    setTimeout(() => {
+    const timerInterval = setInterval(() => {
+      setAnalysisTimer(prev => Math.max(0, prev - 1));
+    }, 1000);
+
+    try {
+      // Real AI analysis using Gemini
+      const aiResult = await analyzeBacBoPattern(history);
+      
+      // Artificial delay to show the analysis steps to the user (10 seconds)
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      
       clearInterval(msgInterval);
+      clearInterval(timerInterval);
       if (!isAuthenticated) return;
-      
-      const types: SignalType[] = ['PLAYER', 'BANKER'];
-      const randomType = types[Math.floor(Math.random() * types.length)];
-      
-      const patterns = [
-        'Quebra de Sequência',
-        'Repetição Tripla',
-        'Padrão Alternado',
-        'Tendência de Mesa',
-        'Volume de Apostas'
-      ];
 
       const newSignal: Signal = {
         id: Date.now().toString(),
-        type: randomType,
+        type: aiResult.type,
         timestamp: new Date(),
         status: 'PENDING',
         gale: 0,
-        confidence: Math.floor(Math.random() * 15) + 85, // 85-99%
-        pattern: patterns[Math.floor(Math.random() * patterns.length)]
+        confidence: aiResult.confidence,
+        pattern: aiResult.pattern,
+        instruction: aiResult.instruction
       };
 
       setCurrentSignal(newSignal);
       setIsAnalyzing(false);
       setAnalysisCount(prev => prev + 1);
-    }, 4500);
-  }, [isAuthenticated]);
+    } catch (error) {
+      console.error("Erro ao gerar sinal:", error);
+      clearInterval(msgInterval);
+      setIsAnalyzing(false);
+    }
+  }, [isAuthenticated, history]);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setNextSignalTimer((prev) => {
         if (prev <= 1) {
           if (isAuthenticated) generateSignal();
-          return 25; // Reset immediately to start next count
+          return 60; // Reset immediately to start next count
         }
         return prev - 1;
       });
@@ -166,11 +183,8 @@ export default function App() {
         // Update current signal with result first
         setCurrentSignal(updatedSignal);
         
-        // After 3 seconds, move to history and clear current
-        setTimeout(() => {
-          setCurrentSignal(null);
-          setHistory((prev) => [updatedSignal, ...prev].slice(0, 20));
-        }, 3000);
+        // Move to history but keep current signal visible until next analysis
+        setHistory((prev) => [updatedSignal, ...prev].slice(0, 20));
 
         // Update accuracy dynamically based on result
         setAccuracy(prev => {
@@ -179,6 +193,10 @@ export default function App() {
           setTimeout(() => setAccuracyTrend(null), 5000);
           return +(Math.max(85, Math.min(99.9, prev + change))).toFixed(1);
         });
+
+        if (isWin) {
+          setTotalWins(prev => prev + 1);
+        }
       }, 12000);
 
       return () => clearTimeout(resultTimer);
@@ -243,6 +261,26 @@ export default function App() {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
+  // Simulated global wins background activity
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Simulate background wins from other "users"
+      if (Math.random() > 0.4) {
+        setTotalWins(prev => {
+          const next = prev + 1;
+          localStorage.setItem('hj_total_wins', next.toString());
+          return next;
+        });
+      }
+    }, 15000); // Every 15 seconds there's a chance of a background win
+    return () => clearInterval(interval);
+  }, []);
+
+  // Update localStorage when totalWins changes from signals
+  useEffect(() => {
+    localStorage.setItem('hj_total_wins', totalWins.toString());
+  }, [totalWins]);
+
   const renderContent = () => {
     switch (currentTab) {
       case 'signals':
@@ -285,7 +323,7 @@ export default function App() {
                   <Trophy className="w-3 h-3 text-yellow-500" />
                   Wins
                 </div>
-                <div className="text-xl font-bold text-green-500">{history.filter(s => s.status === 'WIN').length}</div>
+                <div className="text-xl font-bold text-green-500">{totalWins}</div>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex flex-col gap-1">
                 <div className="flex items-center gap-2 text-gray-400 text-[10px] uppercase tracking-wider font-semibold">
@@ -318,7 +356,10 @@ export default function App() {
                         <PawPrint className="absolute inset-0 m-auto w-6 h-6 text-white animate-pulse" />
                       </div>
                       <div className="text-center">
-                        <h3 className="text-xl font-bold text-white">Analisando...</h3>
+                        <div className="bg-white/5 px-3 py-1 rounded-full text-[8px] font-bold text-gray-500 uppercase tracking-widest mb-4 inline-block">
+                          Aguarde a Confirmação
+                        </div>
+                        <h3 className="text-xl font-bold text-white">Analisando... ({analysisTimer}s)</h3>
                         <p className="text-gray-400 text-sm h-5">{analysisMessage}</p>
                       </div>
                     </motion.div>
@@ -335,6 +376,14 @@ export default function App() {
                       </div>
                       
                       <div className="text-center space-y-2">
+                        {currentSignal.instruction && (
+                          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg px-4 py-2 flex items-center justify-center gap-2 mb-4">
+                            <AlertTriangle className="w-4 h-4 text-yellow-500" />
+                            <span className="text-yellow-500 text-xs font-bold uppercase tracking-wider">
+                              {currentSignal.instruction}
+                            </span>
+                          </div>
+                        )}
                         <div className={`text-6xl font-black tracking-tighter ${currentSignal.type === 'PLAYER' ? 'text-blue-500' : 'text-red-500'}`}>
                           {currentSignal.type === 'PLAYER' ? 'AZUL' : 'VERMELHO'}
                         </div>
@@ -469,6 +518,11 @@ export default function App() {
                       <div className="text-sm font-bold text-white">
                         {signal.type === 'PLAYER' ? 'Jogador' : 'Banqueiro'}
                       </div>
+                      {signal.instruction && (
+                        <div className="text-[8px] text-yellow-500 font-bold uppercase tracking-widest">
+                          {signal.instruction}
+                        </div>
+                      )}
                       <div className="text-[10px] text-gray-500 font-medium">
                         {signal.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </div>
@@ -677,7 +731,7 @@ export default function App() {
                   <span className="text-4xl">🐼</span>
                 </div>
                 <div className="space-y-1">
-                  <h2 className="text-3xl font-black tracking-tighter uppercase">Acesso Restrito</h2>
+                  <h2 className="text-4xl font-black tracking-tighter uppercase">Horti Johnson</h2>
                   <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Horti Johnson. Best of gang</p>
                 </div>
               </div>
