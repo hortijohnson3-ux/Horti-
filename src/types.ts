@@ -9,6 +9,7 @@ export interface Signal {
   confidence?: number;
   pattern?: string;
   instruction?: string;
+  isFallback?: boolean;
 }
 
 export interface AppState {

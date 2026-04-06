@@ -141,7 +141,8 @@ export default function App() {
         gale: 0,
         confidence: aiResult.confidence,
         pattern: aiResult.pattern,
-        instruction: aiResult.instruction
+        instruction: aiResult.instruction,
+        isFallback: aiResult.isFallback
       };
 
       setCurrentSignal(newSignal);
@@ -370,9 +371,9 @@ export default function App() {
                       animate={{ opacity: 1, scale: 1 }}
                       className="flex flex-col items-center space-y-6"
                     >
-                      <div className={`flex items-center gap-2 px-4 py-1.5 border rounded-full text-[10px] font-bold uppercase tracking-widest bg-white/10 border-white/20 text-white`}>
-                        <Zap className="w-3 h-3 text-yellow-500" />
-                        IA: Sinal Confirmado
+                      <div className={`flex items-center gap-2 px-4 py-1.5 border rounded-full text-[10px] font-bold uppercase tracking-widest ${currentSignal.isFallback ? 'bg-orange-500/10 border-orange-500/20 text-orange-500' : 'bg-white/10 border-white/20 text-white'}`}>
+                        <Zap className={`w-3 h-3 ${currentSignal.isFallback ? 'text-orange-500' : 'text-yellow-500'}`} />
+                        {currentSignal.isFallback ? 'Modo de Contingência' : 'IA: Sinal Confirmado'}
                       </div>
                       
                       <div className="text-center space-y-2">
